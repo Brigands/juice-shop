@@ -1,0 +1,40 @@
+name: Security workflow 
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  schedule:
+    - cron:  '02 17 * * *'
+  push: 
+    branches:
+      - "master"
+      - "main"
+      - "develop" 
+ 
+jobs:
+  security-scans: 
+    runs-on: [self-hosted, Linux, standard]
+    steps:
+    # clone the repository
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Download SCA Resolver
+      run: |
+        wget https://sca-downloads.s3.amazonaws.com/cli/latest/ScaResolver-linux64.tar.gz -O ScaResolver-linux64.tar.gz && tar -xzvf ScaResolver-linux64.tar.gz && rm -rf ScaResolver-linux64.tar.gz && chmod +x ScaResolver
+    - name: Run Checkmarx AST CLI Scan
+      run: |
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        /home/linuxbrew/.linuxbrew/bin/brew install checkmarx/ast-cli/ast-cli
+        /home/linuxbrew/.linuxbrew/Cellar/ast-cli/*/bin/cx \
+          scan create \
+          -s . \
+          --agent GitHub \
+          --project-name devsecops_juice_shop \
+          --branch ${GITHUB_REF##*/} \
+          --base-uri https://eu.ast.checkmarx.net \
+          --tenant adeo \
+          --client-id ${{ secrets.CX_CLIENT }} \
+          --client-secret ${{ secrets.CX_CLIENT_SECRET }} \
+          --sca-resolver ./ScaResolver \
+          --sca-resolver-params "--ignore-dev-dependencies false --extract-archives zip,ear --extract-depth 2" 
